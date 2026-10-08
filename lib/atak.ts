@@ -1,0 +1,49 @@
+import type {Portfolio} from './locations';
+import {validPoint} from './location-core';
+import type {Point,ParcelGeometry} from './geo';
+export type AtakRecord={id:string;name:string;lat:number;lng:number;category:string;source:string;detail?:string;date?:string;updatedDate?:string;retrievedAt?:string;stale?:boolean;status?:string;url?:string;geometry?:ParcelGeometry};
+export type AtakOptions={allLocations:boolean;locations:boolean;boundaries:boolean;namedAreas:boolean;observations:boolean;routes:boolean;radio:boolean;details:boolean;addresses:boolean;publicLayers:boolean};
+export const defaultAtakOptions:AtakOptions={allLocations:false,locations:true,boundaries:true,namedAreas:true,observations:true,routes:true,radio:true,details:true,addresses:false,publicLayers:false};
+export function xml(v:unknown){return String(v??'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g,'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]!));}
+const description=(text:string)=>text?`<description>${xml('<pre>'+xml(text)+'</pre>')}</description>`:'';
+const styles=`<Style id="location"><IconStyle><color>ffbdcd70</color><scale>1.2</scale></IconStyle></Style><Style id="aor"><LineStyle><color>ff7d870e</color><width>3</width></LineStyle><PolyStyle><color>227d870e</color></PolyStyle></Style><Style id="aoi"><LineStyle><color>ff3a90cf</color><width>2</width></LineStyle><PolyStyle><color>113a90cf</color></PolyStyle></Style><Style id="named"><LineStyle><color>ffac5071</color><width>2</width></LineStyle><PolyStyle><color>22ac5071</color></PolyStyle><IconStyle><color>ffac5071</color></IconStyle></Style><Style id="note"><IconStyle><color>ff3263bf</color></IconStyle></Style><Style id="primary"><LineStyle><color>ff867f08</color><width>4</width></LineStyle></Style><Style id="alternate"><LineStyle><color>ffa65479</color><width>3</width></LineStyle></Style><Style id="public"><LineStyle><color>ff867b68</color><width>1</width></LineStyle><PolyStyle><color>22867b68</color></PolyStyle><IconStyle><color>ff867b68</color></IconStyle></Style>`;
+export function buildAtakKml(p:Portfolio,o:AtakOptions,records:AtakRecord[]=[],createdAt=new Date().toISOString()){
+ const contexts=[{...p,id:'home',name:'Home',kind:'Home'},...p.locations].filter(c=>o.allLocations||c.id===p.activeLocationId);
+ const ids=new Set(contexts.map(c=>c.id));const counts={locations:0,boundaries:0,namedAreas:0,observations:0,routes:0,routeFeatures:0,frequencies:0,publicRecords:0};let features=0,vertices=0;const warnings:string[]=[];
+ const coord=(point:Point)=>{if(!validPoint(point[0],point[1]))throw Error('An export coordinate is invalid. Check the selected records.');if(++vertices>500000)throw Error('Export exceeds 500,000 coordinates. Disable large public polygon layers.');return `${point[1]},${point[0]},0`;};
+ const point=(p:Point)=>`<Point><altitudeMode>clampToGround</altitudeMode><coordinates>${coord(p)}</coordinates></Point>`;
+ const line=(p:Point[])=>{if(p.length<2)throw Error('A route needs at least two coordinates.');return `<LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode><coordinates>${p.map(coord).join(' ')}</coordinates></LineString>`;};
+ const ring=(p:Point[])=>{if(p.length<3)throw Error('An export polygon needs at least three corners.');const closed=p[0][0]===p.at(-1)![0]&&p[0][1]===p.at(-1)![1]?p:[...p,p[0]];return `<LinearRing><coordinates>${closed.map(coord).join(' ')}</coordinates></LinearRing>`;};
+ const polygon=(rings:Point[][])=>`<Polygon><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode><outerBoundaryIs>${ring(rings[0])}</outerBoundaryIs>${rings.slice(1).map(r=>`<innerBoundaryIs>${ring(r)}</innerBoundaryIs>`).join('')}</Polygon>`;
+ const geometry=(g:ParcelGeometry)=>{const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:null;if(!polys?.length)throw Error('A selected public geometry is unsupported.');const shapes=polys.map(poly=>polygon(poly.map((r:number[][])=>r.map((c:number[])=>[c[1],c[0]] as Point))));return shapes.length>1?`<MultiGeometry>${shapes.join('')}</MultiGeometry>`:shapes[0];};
+ const mark=(name:string,shape:string,style:string,detail='')=>{if(++features>20000)throw Error('Export exceeds 20,000 features. Choose fewer layers or a smaller scope.');return `<Placemark id="feature-${features}"><name>${xml(name)}</name>${description(detail)}<styleUrl>#${style}</styleUrl>${shape}</Placemark>`;};
+ const folder=(name:string,items:string[],detail='')=>`<Folder><name>${xml(name)}</name>${description(detail)}${items.join('')}</Folder>`;
+ const content:string[]=[];
+ for(const c of contexts){const items:string[]=[];
+  if(o.locations&&c.home){counts.locations++;items.push(mark(c.name,point(c.home.point),'location',o.details?[c.kind,o.addresses?c.home.address:'',c.home.sourceNote||''].filter(Boolean).join('\n'):c.kind));}
+  if(o.boundaries)for(const k of ['aor','aoi'] as const){if(c.areas[k].length>=3){counts.boundaries++;items.push(mark(c.name+' '+k.toUpperCase(),polygon([c.areas[k]]),k));}}
+  if(o.namedAreas)for(const n of c.nais){counts.namedAreas++;items.push(mark(n.name,n.kind==='Point'?point(n.points[0]):polygon([n.points]),'named',o.details?n.notes+'\nCreated: '+n.createdAt:''));}
+  if(o.observations)for(const n of c.notes){counts.observations++;items.push(mark(n.name,point([n.lat,n.lng]),'note',o.details?[n.detail,n.source,'Record date: '+(n.date||'unknown'),'Confidence: '+(n.confidence||'unknown'),n.url||''].filter(Boolean).join('\n'):''));}
+  let radio='';if(o.radio){counts.frequencies+=c.radioPlan.length;radio=c.radioPlan.map(r=>`${r.name}: RX ${r.receiveMHz} MHz${r.transmitMHz?' / input '+r.transmitMHz+' MHz':''} · ${r.mode} · ${r.tone}${o.details?'\n'+r.verification+' '+r.checkedOn+'\n'+r.source+' '+r.sourceUrl+'\n'+r.notes:''}`).join('\n\n');}
+  if(radio)radio='Saved frequencies for this study location (no transmitter coordinates inferred):\n'+radio;
+  content.push(folder(c.name,items,radio));
+ }
+ if(o.routes){const routes=p.routes.filter(r=>o.allLocations||ids.has(r.fromLocationId||'')||ids.has(r.toLocationId||''));const items:string[]=[];
+  for(const r of routes){counts.routes++;items.push(mark(r.name,line(r.points),r.role==='Primary'?'primary':'alternate',o.details?[r.role,'Destination: '+r.destination,r.notes,'Full route geometry; passability not verified.'].join('\n'):r.role));for(const m of r.marks){counts.routeFeatures++;items.push(mark(m.name,point(m.point),'note',m.kind));}}
+  if(!o.allLocations&&p.routes.some(r=>!r.fromLocationId&&!r.toLocationId))warnings.push('Unassigned manual routes are excluded from Active location; use Whole study to include them.');
+  if(routes.length)warnings.push('Routes include their entire path, including portions outside the selected location.');
+  content.push(folder('Routes & route features',items));
+ }
+ if(o.publicLayers){const groups=new Map<string,string[]>(),seen=new Set<string>();for(const r of records){const key=r.source+':'+r.id;if(seen.has(key))continue;seen.add(key);const items=groups.get(r.category)||[];items.push(mark(r.name,r.geometry?geometry(r.geometry):point([r.lat,r.lng]),'public',o.details?[r.source,r.detail,'Record date: '+(r.date||'unknown'),'Source update: '+(r.updatedDate||'unknown'),'Retrieved: '+(r.retrievedAt||'unknown'),'Status: '+(r.status||'unknown'),r.stale?'Stale snapshot':'',r.url].filter(Boolean).join('\n'):r.source));groups.set(r.category,items);counts.publicRecords++;}content.push(folder('Visible public layers · active location',Array.from(groups,([name,items])=>folder(name,items))));warnings.push('Public layers are the currently visible records for the active location; they are not collected for other locations by this export.');}
+ if(!features)throw Error('There is nothing to export with these selections.');
+ const kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xml('Field Desk · '+(o.allLocations?'Whole study':contexts[0]?.name||'Active location'))}</name>${description('Snapshot exported '+createdAt+'\nCoordinates are WGS84; altitude is clamped to ground. This is an overlay, not live tracking or verified route clearance.')}${styles}<ExtendedData><Data name="exportedAt"><value>${xml(createdAt)}</value></Data></ExtendedData>${content.join('')}</Document></kml>`;
+ const size=new TextEncoder().encode(kml).length;if(features>5000||size>5000000)warnings.push('Large overlay: importing many public parcels or polygons can be slow on mobile. Consider exporting fewer layers.');if(size>32000000)throw Error('Export exceeds 32 MB. Disable public layers or detailed descriptions.');return {kml,counts,warnings,features,vertices,bytes:size,createdAt};
+}
+// Single-file ZIP (stored method) keeps the KMZ self-contained, with no archive dependencies.
+const crcTable=Uint32Array.from({length:256},(_,value)=>{let crc=value;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);return crc>>>0;});
+export function makeKmz(kml:string){const encoder=new TextEncoder(),data=encoder.encode(kml),name=encoder.encode('doc.kml');let crc=0xffffffff;for(const byte of data)crc=(crc>>>8)^crcTable[(crc^byte)&255];crc=(crc^0xffffffff)>>>0;
+ const localSize=30+name.length+data.length,centralSize=46+name.length,out=new Uint8Array(localSize+centralSize+22),v=new DataView(out.buffer);const u16=(i:number,n:number)=>v.setUint16(i,n,true),u32=(i:number,n:number)=>v.setUint32(i,n,true);
+ u32(0,0x04034b50);u16(4,20);u16(6,0x800);u16(12,33);u32(14,crc);u32(18,data.length);u32(22,data.length);u16(26,name.length);out.set(name,30);out.set(data,30+name.length);
+ const c=localSize;u32(c,0x02014b50);u16(c+4,20);u16(c+6,20);u16(c+8,0x800);u16(c+14,33);u32(c+16,crc);u32(c+20,data.length);u32(c+24,data.length);u16(c+28,name.length);out.set(name,c+46);
+ const e=c+centralSize;u32(e,0x06054b50);u16(e+8,1);u16(e+10,1);u32(e+12,centralSize);u32(e+16,localSize);return out;
+}

@@ -19,7 +19,7 @@ Open **http://127.0.0.1:5173**. Storage and migrations are created automatically
 2. Review map layers and their sources, dates and coverage limits.
 3. Capture evidence, write findings and track unresolved questions.
 4. Add service alternatives, scenarios and routes between locations. Services & infra also includes nearby repeaters and saved local radio frequencies.
-5. **Save study** to retain edits. **Sources & reports** contains review reminders, printable briefings and **Backup & restore**.
+5. **Save study** to retain edits. **Sources & reports → Export to ATAK** downloads a previewed KML/KMZ map overlay. **Sources & reports** contains review reminders, printable briefings and **Backup & restore**.
 
 ## Your data
 
