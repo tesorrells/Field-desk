@@ -1,4 +1,5 @@
 'use client';
+import {collectionFetch} from '../lib/collection-activity';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {RefreshCw,MapPin} from 'lucide-react';
 import HazardProfile from './hazard-profile';
@@ -11,7 +12,7 @@ type Props={home:Point|null;area:Point[];areaName:string;records:NriRecord[];are
 export default function HazardsPanel({home,area,areaName,records,areaStatus,areaBusy,refreshArea,inspect}:Props){
  const [data,setData]=useState<HomeProfiles|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selectedId,setSelectedId]=useState(''),[clock,setClock]=useState(()=>Date.now());
  const controller=useRef<AbortController|null>(null),url='/api/hazards'+(home?`?lat=${home[0]}&lng=${home[1]}`:'');
- const refresh=useCallback(async()=>{controller.current?.abort();const c=new AbortController();controller.current=c;try{const r=await fetch(url,{signal:c.signal}),d=await r.json() as HomeProfiles&{error?:string};if(!r.ok)throw Error(d.error||'Risk profiles unavailable');if(!c.signal.aborted){setData(d);setError('');setClock(Date.now());}}catch(e){if(!c.signal.aborted)setError(e instanceof Error?e.message:'Risk profiles unavailable');}finally{if(!c.signal.aborted)setLoading(false);}},[url]);
+ const refresh=useCallback(async()=>{controller.current?.abort();const c=new AbortController();controller.current=c;try{const r=await collectionFetch(url,{signal:c.signal}),d=await r.json() as HomeProfiles&{error?:string};if(!r.ok)throw Error(d.error||'Risk profiles unavailable');if(!c.signal.aborted){setData(d);setError('');setClock(Date.now());}}catch(e){if(!c.signal.aborted)setError(e instanceof Error?e.message:'Risk profiles unavailable');}finally{if(!c.signal.aborted)setLoading(false);}},[url]);
  // Starts an external request; state updates occur after its response, not synchronously in this effect.
  // eslint-disable-next-line react-hooks/set-state-in-effect
  useEffect(()=>{void refresh();const t=setInterval(()=>{if(document.visibilityState==='visible')void refresh();},120000);return()=>{clearInterval(t);controller.current?.abort();};},[refresh]);

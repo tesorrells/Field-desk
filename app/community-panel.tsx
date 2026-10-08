@@ -1,4 +1,5 @@
 "use client";
+import {collectionFetch} from '../lib/collection-activity';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {RefreshCw,ExternalLink,MapPin} from 'lucide-react';
 import {communitySources,communityMatches,type CommunityItem,type FeedSnapshot} from '../lib/community';
@@ -9,7 +10,7 @@ export default function CommunityPanel({placeNote,alerts,point}:{point?:readonly
  const [feeds,setFeeds]=useState<FeedSnapshot[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState(''),[keywords,setKeywords]=useState(''),[kind,setKind]=useState('all'),[sourceId,setSourceId]=useState('all'),[days,setDays]=useState('30');
  const [sourceIds,setSourceIds]=useState<string[]|null>(null);const registry=sourceIds?communitySources.filter(s=>sourceIds.includes(s.id)):communitySources;const hays=registry.some(s=>s.id==='wimberley-news')&&sourceIds!==null;
  const running=useRef(false);
- async function read(cacheOnly=false,signal?:AbortSignal){const r=await fetch('/api/community?'+new URLSearchParams({...cacheOnly?{cacheOnly:'1'}:{},...point?{lat:String(point[0]),lng:String(point[1])}:{}}),{signal}),d:any=await r.json();if(!r.ok)throw new Error(d.error||'Community feeds unavailable');if(!signal?.aborted){setFeeds(d.feeds);if(Array.isArray(d.sourceIds))setSourceIds(d.sourceIds);}}
+ async function read(cacheOnly=false,signal?:AbortSignal){const r=await collectionFetch('/api/community?'+new URLSearchParams({...cacheOnly?{cacheOnly:'1'}:{},...point?{lat:String(point[0]),lng:String(point[1])}:{}}),{signal}),d:any=await r.json();if(!r.ok)throw new Error(d.error||'Community feeds unavailable');if(!signal?.aborted){setFeeds(d.feeds);if(Array.isArray(d.sourceIds))setSourceIds(d.sourceIds);}}
  async function refresh(){if(running.current)return;running.current=true;setLoading(true);setError('');try{await read();}catch(e:any){setError(e.message);}finally{running.current=false;setLoading(false);}}
  useEffect(()=>{const c=new AbortController();running.current=true;setLoading(true);(async()=>{try{await read(true,c.signal);}catch{}try{await read(false,c.signal);}catch(e:any){if(e.name!=='AbortError')setError(e.message);}finally{running.current=false;if(!c.signal.aborted)setLoading(false);}})();const interval=setInterval(()=>{if(document.visibilityState==='visible')refresh();},300000);return()=>{c.abort();clearInterval(interval);};},[]);
  const byId=Object.fromEntries(registry.map(s=>[s.id,s]));

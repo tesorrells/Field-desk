@@ -1,4 +1,5 @@
 "use client";
+import {collectionFetch} from '../lib/collection-activity';
 import {useEffect,useRef,useState} from 'react';
 import {coordinateAddress,parseDirectionsLink,type RoadRoute} from '../lib/road-routing';
 import {directionsUrl,type LocationEndpoint} from '../lib/location-core';
@@ -17,12 +18,12 @@ export default function AutomaticRoutes({endpoints,add,limit=false,slots=100}:{e
  async function findAddress(which:'from'|'to',side:Side){
   const point=coordinateAddress(side.address);if(point){edit(which,{...side,point,matches:[]});return;}
   controller.current?.abort();const abort=new AbortController();controller.current=abort;setBusy(which);setError('');
-  try{const r=await fetch('/api/address?'+new URLSearchParams({q:side.address}),{signal:abort.signal});const d=await r.json() as {error?:string;matches?:AddressMatch[]};if(!r.ok)throw Error(d.error||'Address lookup failed');if(!d.matches?.length)throw Error('No Census address match. Check the address or use a saved location with a verified map pin.');if(!abort.signal.aborted)(which==='from'?setFrom:setTo)({...side,matches:d.matches});}
+  try{const r=await collectionFetch('/api/address?'+new URLSearchParams({q:side.address}),{signal:abort.signal});const d=await r.json() as {error?:string;matches?:AddressMatch[]};if(!r.ok)throw Error(d.error||'Address lookup failed');if(!d.matches?.length)throw Error('No Census address match. Check the address or use a saved location with a verified map pin.');if(!abort.signal.aborted)(which==='from'?setFrom:setTo)({...side,matches:d.matches});}
   catch(e){if(!abort.signal.aborted)setError((e as Error).message);}finally{if(controller.current===abort)setBusy('');}
  }
  async function generate(){
   if(!origin||!destination)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;setBusy('route');setError('');setCandidates([]);
-  try{const r=await fetch('/api/road-routes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:origin.point,to:destination.point}),signal:abort.signal});const d=await r.json() as {routes?:RoadRoute[];error?:string};if(!r.ok)throw Error(d.error||'Routing failed');if(!abort.signal.aborted)setCandidates((d.routes||[]).map(road=>({road,fromLabel:origin.label,toLabel:destination.label,fromId:'id' in origin?origin.id:undefined,toId:'id' in destination?destination.id:undefined})));}
+  try{const r=await collectionFetch('/api/road-routes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:origin.point,to:destination.point}),signal:abort.signal});const d=await r.json() as {routes?:RoadRoute[];error?:string};if(!r.ok)throw Error(d.error||'Routing failed');if(!abort.signal.aborted)setCandidates((d.routes||[]).map(road=>({road,fromLabel:origin.label,toLabel:destination.label,fromId:'id' in origin?origin.id:undefined,toId:'id' in destination?destination.id:undefined})));}
   catch(e){if(!abort.signal.aborted)setError((e as Error).message);}finally{if(controller.current===abort)setBusy('');}
  }
  function useLink(){try{const pair=parseDirectionsLink(link);edit('from',{id:'address',address:pair.from,point:coordinateAddress(pair.from),matches:[]});edit('to',{id:'address',address:pair.to,point:coordinateAddress(pair.to),matches:[]});}catch(e){setError((e as Error).message);}}

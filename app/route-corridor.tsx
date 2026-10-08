@@ -1,4 +1,5 @@
 "use client";
+import {collectionFetch} from '../lib/collection-activity';
 import {useEffect,useRef,useState} from 'react';
 import {collectRouteCorridor,routeSignature,type CorridorReport,type CorridorRecord} from '../lib/route-corridor';
 import type {StudyRoute} from '../lib/routes';
@@ -8,7 +9,7 @@ export default function RouteCorridor({route,loaded,finish}:{route:StudyRoute;lo
  useEffect(()=>()=>controller.current?.abort(),[]);
  async function collect(){
   setError('');setBusy(true);const abort=new AbortController();controller.current=abort;
-  try{const result=await collectRouteCorridor(route.points,width,abort.signal,(done,total)=>setProgress(`${done} / ${total} source sections checked`));if(!abort.signal.aborted){finish(result.report,result.rows);setProgress('');}}
+  try{const result=await collectRouteCorridor(route.points,width,abort.signal,(done,total)=>setProgress(`${done} / ${total} source sections checked`),collectionFetch);if(!abort.signal.aborted){finish(result.report,result.rows);setProgress('');}}
   catch(e){if(!abort.signal.aborted)setError((e as Error).message);}
   finally{if(controller.current===abort)setBusy(false);}
  }
