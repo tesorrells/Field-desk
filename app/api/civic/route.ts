@@ -1,0 +1,5 @@
+import {civicSources,civicSourcesForCounty,collectCivic} from '../../../lib/civic';
+import {cachedCondition} from '../../../lib/conditions-storage';
+import {collectLocationGeography} from '../../../lib/location-geography';
+import {validPoint} from '../../../lib/location-core';
+export async function GET(request:Request){const q=new URL(request.url).searchParams;let registry=civicSources;if(q.has('lat')||q.has('lng')){const lat=Number(q.get('lat')),lng=Number(q.get('lng'));if(!q.get('lat')?.trim()||!q.get('lng')?.trim()||!validPoint(lat,lng))return Response.json({error:'Choose a valid location point.'},{status:400});const context=await cachedCondition('location-context:'+lat+','+lng,86400000,()=>collectLocationGeography(lat,lng));if(!context.data)return Response.json({error:'County lookup unavailable; local calendar selection needs verification.'},{status:502});registry=civicSourcesForCounty(context.data.countyFips);}const sources=await Promise.all(registry.map(async s=>({sourceId:s.id,...await cachedCondition('civic:v4:'+s.id,s.id==='roads'?900000:1800000,()=>collectCivic(s.id))})));return Response.json({sources},{headers:{'Cache-Control':'no-store'}});}

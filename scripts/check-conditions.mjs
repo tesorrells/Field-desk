@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {parseGrid,parseDrought,parseForecast,parseAlerts,liveAlerts,refreshCondition,collectForecast,sourceJson} from '../lib/conditions.ts';
+import {wireGroups,matchedKeywords} from '../lib/wire.ts';
+const now=new Date('2026-10-06T12:00:00Z');
+assert.equal(parseGrid({current_condition:{title:'Normal Conditions',condition_note:'Enough power',state:'normal',prc_value:'17,307',datetime:now.getTime()/1000}}).reserves,17307);
+assert.throws(()=>parseGrid({current_condition:{title:'Normal',datetime:now.getTime()/1000}}));
+const d=parseDrought([{fips:'48453',county:'Travis County',statisticFormatID:1,mapDate:'2026-09-29T00:00:00',d0:100,d1:90,d2:70,d3:20,d4:0}]);assert.equal(d[0].dsci,280);assert.equal(d[0].d2,70);assert.equal(d[0].date,'2026-09-29');
+assert.throws(()=>parseDrought([{fips:'48453',statisticFormatID:2,mapDate:'2026-09-29',d0:0,d1:10,d2:0,d3:0,d4:0}]));assert.throws(()=>parseDrought([]));
+const f=parseForecast({properties:{updateTime:now.toISOString(),periods:[{name:'Today',startTime:now.toISOString(),endTime:'2026-10-06T18:00:00-05:00',temperature:87,temperatureUnit:'F',windSpeed:'5 mph',windDirection:'N',shortForecast:'Sunny',probabilityOfPrecipitation:{value:null}}]}});assert.equal(f.periods[0].rain,null);assert.equal(f.periods[0].temperature,87);
+const a=parseAlerts({features:[{id:'a',properties:{event:'Flood Watch',sent:now.toISOString(),expires:'2026-10-06T13:00:00Z',ends:'2026-10-06T12:30:00Z'}}]});assert.equal(liveAlerts(a,now.getTime()).length,1);assert.equal(liveAlerts(a,Date.parse('2026-10-06T12:45:00Z')).length,0);assert.deepEqual(parseAlerts({features:[]}),[]);assert.throws(()=>parseAlerts({}));
+let calls=0;const first=await refreshCondition(undefined,async()=>{calls++;return [];},120000,now);const cached=await refreshCondition(first,async()=>{calls++;return ['wrong'];},120000,new Date(now.getTime()+1000));assert.equal(cached.cached,true);assert.equal(calls,1);
+const failed=await refreshCondition(first,async()=>{throw Error('Source unavailable');},120000,new Date(now.getTime()+180000));assert.deepEqual(failed.data,[]);assert.equal(failed.fetchedAt,first.fetchedAt);assert.equal(failed.error,'Source unavailable');
+const title='Austin council approves a new flood warning program',base={id:'1',feedId:'kut',url:'https://www.kut.org/a',title,date:now.toISOString()},match={...base,id:'2',feedId:'kxan',url:'https://www.kxan.com/a'},unrelated={...match,id:'3',url:'https://www.kxan.com/b',title:'Austin council rejects a new flood warning program'};
+const groups=wireGroups([base,match,unrelated]);assert.equal(groups.length,2);assert.equal(groups[0].matches.length,1);assert.deepEqual(matchedKeywords(base,'Manor, flood, Austin'),['flood','Austin']);assert.equal(wireGroups([base,{...match,date:'2026-09-01T00:00:00Z'}]).length,2);
+await assert.rejects(()=>collectForecast(30.3,-97.5,async()=>new Response(JSON.stringify({properties:{forecast:'https://evil.invalid/forecast'}}))),/location unavailable/);
+let redirects=0;assert.deepEqual(await sourceJson('https://api.weather.gov/points/30.36875,-97.54035',async()=>++redirects===1?new Response('',{status:301,headers:{location:'/points/30.3688,-97.5404'}}):new Response('{"ok":true}')),{ok:true});
+await assert.rejects(()=>sourceJson('https://api.weather.gov/points/30,-97',async()=>new Response('',{status:301,headers:{location:'https://evil.invalid/'}})),/official host/);
+console.log('Conditions checks passed: source validation, drought percentages/index, missing values, forecast dates, alert expiry, cache reuse, stale fallback and cautious headline grouping.');

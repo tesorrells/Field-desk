@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {powerRow,fetchBluebonnet,parseWaterFeed,noticeLabel,utilityProvidersSchema,parseDistrictResources} from '../lib/lifelines.ts';
+import {studySchema,isOlderStudyWrite} from '../lib/study-schema.ts';
+import {newServicePlan} from '../lib/dependencies.ts';
+const p={outageRecID:'test',outagePoint:{lat:30.35,lng:-97.55},customersOutNow:0,verified:false,outageStartTime:'2026-10-07T15:35:21-05:00',estimatedTimeOfRestoral:null};
+assert.equal(powerRow(p).power.customers,0);assert.equal(powerRow(p).power.verified,false);assert.equal(powerRow(p).power.restoration,null);
+assert.throws(()=>powerRow({...p,outagePoint:{lat:'30.35',lng:-97.55}}));
+const source=u=>new Response(JSON.stringify(String(u).includes('outageSummary')?{customersOutNow:0,customersServed:100,updateTime:'2026-10-07T16:00:00-05:00'}:[p]));
+assert.equal((await fetchBluebonnet(async u=>source(u))).customersOut,0);
+await assert.rejects(fetchBluebonnet(async()=>new Response('{}')),/unavailable/);
+const rss='<rss><channel><item><title>Boil water notice lifted</title><link>https://www.manortx.gov/AlertCenter.aspx?AID=1</link><description>Scope: Example street</description><pubDate>bad</pubDate></item></channel></rss>';
+const notices=parseWaterFeed(rss);assert.equal(notices[0].published,null);assert.equal(notices[0].label,'Published lift / rescission');assert.deepEqual(parseWaterFeed('<rss><channel></channel></rss>'),[]);
+assert.throws(()=>parseWaterFeed(rss.replace('www.manortx.gov','example.org')));
+assert.throws(()=>parseWaterFeed(rss.replace('</rss>','')));
+assert.equal(noticeLabel('Boil Water Notice'),'Published boil-water notice · review status');
+assert.deepEqual(utilityProvidersSchema.parse(undefined),{electricity:'unknown',water:'unknown'});assert.equal(utilityProvidersSchema.safeParse({electricity:'guess',water:'manor'}).success,false);
+assert.equal(isOlderStudyWrite(5,6),true);assert.equal(isOlderStudyWrite(6,6),false);assert.equal(isOlderStudyWrite(4,5),true);
+const plan=newServicePlan();const v5={schemaVersion:5,servicePlans:[plan],nais:[],collection:{purpose:'Preserve this purpose',questions:[]},routes:[],home:null,areas:{aor:[],aoi:[]},notes:[],sections:{Terrain:'Keep this narrative'}};
+const migrated=studySchema.parse(v5);assert.equal(migrated.schemaVersion,9);assert.equal(migrated.sections.Terrain,v5.sections.Terrain);assert.equal(migrated.collection.purpose,v5.collection.purpose);assert.equal(migrated.servicePlans[0].id,plan.id);
+const v6=studySchema.parse({...migrated,utilityProviders:{electricity:'bluebonnet',water:'manor'}});assert.deepEqual(JSON.parse(JSON.stringify(v6)).utilityProviders,{electricity:'bluebonnet',water:'manor'});
+console.log('Lifeline checks passed: zero/missing values, invalid sources, empty/lifted feeds, provider validation and study migration preservation.');
+
+assert.equal(utilityProvidersSchema.parse({water:'wilbargercreekmud1'}).water,'wilbargercreekmud1');
+assert.equal(isOlderStudyWrite(6,7),true);
+const district='<h1>Wilbarger Creek Municipal Utility District No. 1</h1><a href="https://tmc.tritoncg.com/media/Notice.pdf">Current Water Restrictions</a>';
+assert.equal(parseDistrictResources(district).links.length,1);
+assert.throws(()=>parseDistrictResources(district.replace('No. 1','No. 2')));
+assert.throws(()=>parseDistrictResources(district.replace('tmc.tritoncg.com','example.org')));

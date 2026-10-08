@@ -1,0 +1,29 @@
+import type {Bounds} from './area-cache';
+export const waterApi='https://api.waterdata.usgs.gov/ogcapi/v1/collections/';
+export const waterParameters:Record<string,string>={'00060':'Streamflow','00065':'Gage height','00045':'Precipitation'};
+export type GaugeReading={seriesId:string;parameter:string;label:string;value:number|null;rawValue:string;unit:string;observedAt:string;updatedAt:string|null;approval:string;qualifier:string;statistic:string};
+export type GaugeData={siteId:string;readings:GaugeReading[]};
+export type GaugeRecord={id:string;name:string;lat:number;lng:number;category:string;source:string;url:string;detail:string;water:GaugeData;retrievedAt?:string;stale?:boolean};
+type Feature={id?:string;properties:Record<string,unknown>;geometry:{type:string;coordinates:number[]}|null};
+type Collection={features:Feature[];links?:{rel:string;href:string}[]};
+const text=(v:unknown)=>typeof v==='string'?v.trim():'';
+function timestamp(v:unknown){const s=text(v);return s&&Number.isFinite(Date.parse(s))?s:null;}
+export function waterSearchBounds(b:Bounds):Bounds{const padded:Bounds=[Math.max(-90,b[0]-.08),Math.max(-180,b[1]-.08),Math.min(90,b[2]+.08),Math.min(180,b[3]+.08)];return (padded[2]-padded[0])*(padded[3]-padded[1])<=.7?padded:b;}
+export function parseGaugeReading(f:Feature){const p=f.properties,id=text(p.monitoring_location_id),parameter=text(p.parameter_code),seriesId=text(p.time_series_id),observedAt=timestamp(p.time),g=f.geometry;
+ if(!/^USGS-\d{8,15}$/.test(id)||!waterParameters[parameter]||!seriesId||!observedAt||g?.type!=='Point'||!Number.isFinite(g.coordinates[0])||!Number.isFinite(g.coordinates[1]))throw Error('USGS returned an invalid gauge observation.');
+ const rawValue=text(p.value),numeric=rawValue!==''?Number(rawValue):NaN;
+ const reading:GaugeReading={seriesId,parameter,label:waterParameters[parameter],value:Number.isFinite(numeric)&&numeric>-999000?numeric:null,rawValue,unit:text(p.unit_of_measure)||'Unit unavailable',observedAt,updatedAt:timestamp(p.last_modified),approval:text(p.approval_status)||'Unspecified',qualifier:text(p.qualifier),statistic:text(p.statistic_id)||'Unspecified'};
+ return {siteId:id,lat:g.coordinates[1],lng:g.coordinates[0],reading};
+}
+export function readingAge(r:GaugeReading,now=Date.now()){const ms=now-Date.parse(r.observedAt);return ms < -300000?'Future timestamp · verify source':ms>7200000?'Older than 2 hours':r.value===null?'Value unavailable':'Recent observation';}
+async function page(url:URL,request:typeof fetch){const r=await request(url,{headers:{Accept:'application/geo+json'},signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error(`USGS returned HTTP ${r.status}${r.status===429?' (public API rate limit; retry later)':''}`);const body=await r.text();if(body.length>3000000)throw Error('USGS response exceeds the collection limit.');const d=JSON.parse(body) as Collection;if(!Array.isArray(d.features))throw Error('USGS observations unavailable.');return d;}
+function nextPage(d:Collection,path:string){const next=d.links?.find(l=>l.rel==='next')?.href;if(!next)return null;const u=new URL(next);if(u.origin!=='https://api.waterdata.usgs.gov'||u.pathname!==path||u.username||u.password)throw Error('USGS pagination left its official endpoint.');return u;}
+export async function fetchWaterGauges(bbox:Bounds,request:typeof fetch=fetch){
+ const u=new URL(waterApi+'latest-continuous/items');u.search=new URLSearchParams({f:'json',bbox:[bbox[1],bbox[0],bbox[3],bbox[2]].join(','),filter:"parameter_code IN ('00060','00065','00045')",'filter-lang':'cql2-text',limit:'200'}).toString();
+ let next:URL|null=u,complete=false;const groups=new Map<string,GaugeRecord>();
+ for(let i=0;i<5&&next;i++){const d=await page(next,request);for(const f of d.features){const item=parseGaugeReading(f);const row=groups.get(item.siteId)||{id:'gauge:'+item.siteId,name:item.siteId,lat:item.lat,lng:item.lng,category:'Stream & rain gauges',source:'USGS water observations',url:`https://waterdata.usgs.gov/monitoring-location/${item.siteId}/`,detail:'',water:{siteId:item.siteId,readings:[]}};const prior=row.water.readings.findIndex(r=>r.seriesId===item.reading.seriesId);if(prior<0)row.water.readings.push(item.reading);else if(Date.parse(row.water.readings[prior].observedAt)<Date.parse(item.reading.observedAt))row.water.readings[prior]=item.reading;groups.set(item.siteId,row);}next=nextPage(d,u.pathname);if(!next)complete=true;}
+ const rows=[...groups.values()];let warning='';
+ if(rows.length){try{for(let offset=0;offset<rows.length;offset+=100){const batch=rows.slice(offset,offset+100),m=new URL(waterApi+'monitoring-locations/items');m.search=new URLSearchParams({f:'json',filter:`id IN (${batch.map(r=>"'"+r.water.siteId+"'").join(',')})`,'filter-lang':'cql2-text',limit:'100'}).toString();const d=await page(m,request);for(const f of d.features){const row=groups.get(text(f.properties.id)||text(f.id));if(row)row.name=text(f.properties.monitoring_location_name)||row.name;}if(nextPage(d,m.pathname))warning='Some station names were not returned; USGS IDs are shown.';}}catch{warning='Station names could not be retrieved. Observations remain available under their USGS IDs.';}}
+ for(const r of rows){r.water.readings.sort((a,b)=>a.parameter.localeCompare(b.parameter)||a.seriesId.localeCompare(b.seriesId));r.detail=[`USGS site: ${r.water.siteId}`,...r.water.readings.map(v=>`${v.label}: ${v.value===null?'Unavailable ('+v.rawValue+')':v.rawValue} ${v.unit}; observed ${v.observedAt}; source updated ${v.updatedAt||'Unavailable'}; ${v.approval}; qualifier ${v.qualifier||'none supplied'}; statistic ${v.statistic}`),'Gage height uses a station-specific datum. Rainfall accumulation interval is not supplied here. These readings do not establish road passability.'].join('\n');}
+ return {rows,complete,limit:1000,fetchedAt:new Date().toISOString(),provider:'USGS Water Data API v1',warning};
+}

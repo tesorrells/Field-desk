@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {inside,simple,containsPolygon,areaSqMiles} from '../lib/geo.ts';
+const box=[[30.33,-97.57],[30.33,-97.55],[30.35,-97.55],[30.35,-97.57]];
+assert(inside([30.34,-97.56],box));
+assert(!inside([30.36,-97.56],box));
+assert(simple(box));
+assert(!simple([box[0],box[2],box[1],box[3]]));
+assert(!simple([box[0],box[1],box[0],box[2]]));
+assert(containsPolygon(box,[[30.335,-97.565],[30.335,-97.555],[30.345,-97.555],[30.345,-97.565]]));
+assert(!containsPolygon(box,[[30.335,-97.565],[30.335,-97.545],[30.345,-97.555]]));
+assert(areaSqMiles(box)>1.5&&areaSqMiles(box)<1.8);
+console.log('Geometry checks passed: filtering, area, crossing edges, and containment.');

@@ -1,0 +1,10 @@
+import {z} from 'zod';
+export const reviewDay=z.string().refine(v=>v===''||(/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T12:00:00Z'))&&new Date(v+'T12:00:00Z').toISOString().slice(0,10)===v),'Choose a valid date');
+export const reviewTypes=['Question','Requirement','Scenario','Service','Route'] as const;
+export const reviewTargetSchema=z.object({type:z.enum(reviewTypes),locationId:z.string().min(1).max(100),itemId:z.string().min(1).max(100),parentId:z.string().max(100).default('')});
+export const reviewSettingsSchema=z.object({intervalDays:z.number().int().min(1).max(3650).default(90),evidenceAgeDays:z.number().int().min(1).max(3650).default(90),upcomingDays:z.number().int().min(0).max(90).default(7)}).default({intervalDays:90,evidenceAgeDays:90,upcomingDays:7});
+export const reviewEventSchema=z.object({id:z.string().uuid(),target:reviewTargetSchema,title:z.string().min(1).max(500),recordedAt:z.string().datetime(),nextReview:reviewDay.refine(v=>!!v,'Choose a next review date'),note:z.string().trim().min(1).max(1000),observed:z.array(z.object({key:z.string().max(250),fingerprint:z.string().max(100)})).max(50)});
+export const reviewsSchema=z.object({settings:reviewSettingsSchema,history:z.array(reviewEventSchema).max(300).refine(v=>new Set(v.map(x=>x.id)).size===v.length,'Duplicate review IDs').default([])}).default({settings:{intervalDays:90,evidenceAgeDays:90,upcomingDays:7},history:[]});
+export type ReviewTarget=z.infer<typeof reviewTargetSchema>;
+export type ReviewEvent=z.infer<typeof reviewEventSchema>;
+export type ReviewSettings=z.infer<typeof reviewSettingsSchema>;

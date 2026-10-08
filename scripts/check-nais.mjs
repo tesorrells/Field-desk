@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import {naisSchema,validNaiPolygon,naiFeature,removeNaiLinks} from '../lib/nais.ts';
+import {collectionSchema,newQuestion} from '../lib/collection.ts';
+
+const points=[[30.36,-97.55],[30.36,-97.54],[30.37,-97.54],[30.37,-97.55]];
+const area={id:'nai-1',name:'Example access area',kind:'Polygon',points,notes:'Verify road access',createdAt:new Date().toISOString()};
+const location={...area,id:'nai-2',kind:'Point',points:[points[0]]};
+assert.deepEqual(naisSchema.parse(undefined),[]);
+assert.equal(validNaiPolygon(points),true);
+assert.equal(validNaiPolygon([points[0],points[2],points[1],points[3]]),false);
+assert.equal(validNaiPolygon([points[0],points[1],points[1],points[3]]),false);
+assert.equal(validNaiPolygon([[30.36,-97.55],[30.36,-97.54],[30.36,-97.53]]),false);
+// A nonadjacent edge touching a corner is invalid, even without a strict crossing.
+assert.equal(validNaiPolygon([[30.36,-97.55],[30.36,-97.53],[30.38,-97.53],[30.36,-97.54],[30.38,-97.55]]),false);
+assert.equal(naisSchema.safeParse([{...area,points:[[91,-97.55],...points.slice(1)]}]).success,false);
+assert.equal(naisSchema.safeParse([area,area]).success,false);
+assert.equal(naisSchema.safeParse([{...location,points}]).success,false);
+assert.equal(naisSchema.safeParse([{...area,name:' '}]).success,false);
+const areas=naisSchema.parse([area,location]);
+assert.deepEqual(naisSchema.parse(JSON.parse(JSON.stringify(areas))),areas);
+const polygon=naiFeature(area,['question-1']);
+assert.deepEqual(polygon.geometry.coordinates[0][0],[-97.55,30.36]);
+assert.deepEqual(polygon.geometry.coordinates[0].at(-1),polygon.geometry.coordinates[0][0]);
+assert.deepEqual(polygon.properties.questionIds,['question-1']);
+assert.deepEqual(naiFeature(location,[]).geometry,{type:'Point',coordinates:[-97.55,30.36]});
+const q={...newQuestion(),naiIds:['nai-1','nai-2'],assessment:'Saved finding'};
+assert.deepEqual(removeNaiLinks([q],'nai-1'),[{...q,naiIds:['nai-2']}]);
+assert.deepEqual(q.naiIds,['nai-1','nai-2']);
+const {naiIds,...legacy}=newQuestion();
+assert.deepEqual(collectionSchema.parse({purpose:'',questions:[legacy]}).questions[0].naiIds,[]);
+console.log('Named area checks passed: legacy defaults, valid and invalid geometry, local bounds, round trip, GeoJSON, and link removal without losing findings.');

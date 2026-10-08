@@ -1,0 +1,15 @@
+import {reviewsSchema} from './review-schema';
+import {scenariosSchema} from './scenarios';
+import {utilityProvidersSchema} from './lifelines';
+import {servicePlansSchema} from './dependencies';
+import {z} from 'zod';
+import {pointSchema} from './location-core';
+import {routesSchema} from './route-schema';
+import {collectionSchema} from './collection';
+import {naisSchema} from './nais';
+const point=pointSchema;
+export const locationContextSchema=z.object({scenarios:scenariosSchema,utilityProviders:utilityProvidersSchema,servicePlans:servicePlansSchema,nais:naisSchema,collection:collectionSchema,home:z.object({point,address:z.string().max(300),sourceNote:z.string().max(500).optional()}).nullable(),areas:z.object({aor:z.array(point).max(200),aoi:z.array(point).max(200)}),notes:z.array(z.object({id:z.string().max(100),name:z.string().max(160),lat:z.number().min(-90).max(90),lng:z.number().min(-180).max(180),category:z.string().max(100),source:z.string().max(200),date:z.string().optional(),detail:z.string().max(20000).optional(),confidence:z.string().max(100).optional(),url:z.string().max(2000).optional(),status:z.string().max(200).optional()})).max(1000),sections:z.record(z.string().max(50000))});
+export const studyLocationSchema=locationContextSchema.extend({id:z.string().min(1).max(100).refine(id=>id!=="home"),name:z.string().trim().min(1).max(160),kind:z.enum(["Work","Bug out","Other"]),notional:z.boolean().default(false)});
+export const studySchema=locationContextSchema.extend({reviews:reviewsSchema,schemaVersion:z.union([z.literal(2),z.literal(3),z.literal(4),z.literal(5),z.literal(6),z.literal(7),z.literal(8),z.literal(9),z.literal(10),z.literal(11)]).default(11).transform(()=>11 as const),routes:routesSchema,locations:z.array(studyLocationSchema).max(20).default([]),activeLocationId:z.string().max(100).default("home")}).superRefine((s,ctx)=>{const locationIds=new Set(["home",...s.locations.map(l=>l.id)]);if(locationIds.size!==s.locations.length+1||!locationIds.has(s.activeLocationId))ctx.addIssue({code:z.ZodIssueCode.custom,path:["locations"],message:"Use unique location IDs and select an existing location"});for(const context of [s,...s.locations]){const ids=new Set(context.nais.map(n=>n.id)),questions=new Set(context.collection.questions.map(q=>q.id));if(context.servicePlans.some(p=>p.questionIds.some(id=>!questions.has(id))))ctx.addIssue({code:z.ZodIssueCode.custom,path:["servicePlans"],message:"A service plan links to a missing question in this location"});if(context.collection.questions.some(q=>q.naiIds.some(id=>!ids.has(id))))ctx.addIssue({code:z.ZodIssueCode.custom,path:["collection"],message:"A question links to a missing named area in this location"});}if(s.routes.some(r=>[r.fromLocationId,r.toLocationId].some(id=>id&&!locationIds.has(id))))ctx.addIssue({code:z.ZodIssueCode.custom,path:["routes"],message:"A route references a missing study location"});});
+
+export function isOlderStudyWrite(incoming:number|undefined,stored:number){return stored>Math.max(incoming||1,2);}

@@ -1,0 +1,2 @@
+import {communitySources,collectCommunity} from '../lib/community.ts';
+for(const source of communitySources){try{const items=await collectCommunity(source);console.log(JSON.stringify({source:source.name,status:'responded',items:items.length,newest:items.filter(p=>p.date).sort((a,b)=>Date.parse(b.date)-Date.parse(a.date))[0]?.date}));}catch(e){console.log(JSON.stringify({source:source.name,status:'unavailable',reason:e.message}));}}

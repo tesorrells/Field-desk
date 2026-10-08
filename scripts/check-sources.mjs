@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {fetchPlaces} from '../lib/places.ts';
+import {reportDate,reportAgeDays,isClosed} from '../lib/report-dates.ts';
+const bbox=[30.32,-97.58,30.36,-97.53];
+const data={elements:[{type:'node',id:1,lat:30.34,lon:-97.56,tags:{name:'Sample grocery',shop:'supermarket'}},{type:'way',id:2,center:{lat:30.34,lon:-97.56},tags:{amenity:'clinic'}}]};
+let calls=0;
+const fallback=await fetchPlaces(bbox,async()=>{calls++;if(calls===1)return new Response('Busy',{status:429});return Response.json(data);});
+assert.equal(calls,2);assert.equal(fallback.provider,'VK Maps Overpass');assert.equal(fallback.rows.length,2);assert.equal(fallback.rows[0].category,'Food & supplies');assert.equal(fallback.rows[1].category,'Medical');assert.match(fallback.failures[0],/429/);
+await assert.rejects(fetchPlaces(bbox,async()=>{throw new DOMException('Timeout','TimeoutError');}),/No places were loaded.*timed out/);
+const empty=await fetchPlaces(bbox,async()=>Response.json({elements:[]}));assert.equal(empty.rows.length,0);
+calls=0;const partial=await fetchPlaces(bbox,async()=>{calls++;return Response.json(calls===1?{elements:[],remark:'runtime error'}:data);});assert.equal(partial.rows.length,2);assert.equal(calls,2);
+assert.equal(reportDate('2026-10-05T23:30:00'),'Oct 5, 2026');
+assert.equal(reportDate('2026-10-05T23:30:00',true),'Oct 5, 2026, 11:30 PM');
+assert.equal(reportAgeDays('2026-10-04T23:30:00',new Date('2026-10-05T22:00:00Z')),1);
+assert.equal(reportAgeDays('2026-10-05T00:00:00',new Date('2026-10-06T01:00:00Z')),0);
+assert.equal(reportAgeDays('2026-10-06T01:30:00Z',new Date('2026-10-06T20:00:00Z')),1);
+assert.equal(reportDate(undefined),'Date unavailable');assert(isClosed('Closed'));assert(!isClosed('In Progress'));
+console.log('Source checks passed: fallback, rate limit, timeout, partial/empty response, calendar dates, age and status.');

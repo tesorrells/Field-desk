@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import {collectRouteCorridor,corridorSections,corridorTiles,inCorridor,routeSignature} from '../lib/route-corridor.ts';
+import {routesSchema} from '../lib/route-schema.ts';
+import {routeFeature} from '../lib/routes.ts';
+const points=[[30.3,-97.7],[30.1,-97.9],[30,-98.1]];
+const tiles=corridorTiles(points,500);
+assert(tiles.length>3&&tiles.length<80);
+for(let i=1;i<points.length;i++)for(let j=0;j<=100;j++){
+ const p=points[i-1],q=points[i],lat=p[0]+(q[0]-p[0])*j/100,lng=p[1]+(q[1]-p[1])*j/100;
+ assert(tiles.some(b=>lat>=b[0]&&lat<=b[2]&&lng>=b[1]&&lng<=b[3]),'every route segment covered, including outside location AOIs');
+}
+assert.equal(new Set(tiles.map(b=>b.join(','))).size,tiles.length,'tile requests deduplicated');
+const line=[[30.3,-97.7],[30.3,-97.65]],record={id:'near',name:'Supply',lat:30.301,lng:-97.675,source:'OSM'};
+assert(inCorridor(record,line,500));assert(!inCorridor({...record,lat:30.31},line,500));
+assert(inCorridor({...record,lat:31,lng:-98,geometry:{type:'Polygon',coordinates:[[[-97.68,30.299],[-97.67,30.299],[-97.67,30.301],[-97.68,30.301],[-97.68,30.299]]]}},line,500),'geometry, not distant centroid, determines polygon inclusion');
+assert(!inCorridor({...record,geometry:{type:'Polygon',coordinates:[[[-98,31],[-97.9,31],[-97.9,31.1],[-98,31.1],[-98,31]]]}},line,500));
+assert.throws(()=>corridorTiles([[30,-98],[45,-80]],500),/200 miles/);
+assert.throws(()=>corridorSections(line,20000));
+assert.throws(()=>corridorTiles([[85,0],[85,.01]],500));
+const report={signature:routeSignature(points),width:500,collectedAt:new Date().toISOString(),count:3,sources:[{kind:'resources',name:'Places',complete:2,total:4,failed:1,unsupported:1,stale:0,count:3,warnings:['Coverage gap']}]};
+const route={id:'r',name:'Trip',destination:'Destination',role:'Contingency',points,marks:[],notes:'Verify access',corridor:report};
+assert.deepEqual(routesSchema.parse([route])[0],route,'report persists without breaking old routes');
+assert.deepEqual(routeFeature(route).properties.corridor,report,'export retains collection provenance');
+assert(routesSchema.safeParse([{...route,role:'Emergency'}]).success);
+assert.notEqual(routeSignature([...points,[30,-98.2]]),report.signature,'redraw invalidates old findings');
+assert.equal(routesSchema.safeParse([{...route,corridor:{...report,width:9999}}]).success,false);
+console.log('Full corridor tile coverage, point/polygon filtering, collection limits, PACE, report persistence and export passed.');
+
+let inFlight=0,maxInFlight=0;const calls=[],updates=[];
+const mock=async (url)=>{
+ inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);await new Promise(resolve=>setTimeout(resolve,1));inFlight--;
+ const kind=new URL(url,'http://localhost').searchParams.get('kind');calls.push(kind);
+ if(kind==='wildfires')return Response.json({error:'Upstream unavailable'},{status:503});
+ if(kind==='closurestatus')return Response.json({unsupported:true,rows:[]});
+ if(kind==='fema')return Response.json({stale:true,partial:true,rows:[],warning:'Stale source'});
+ if(kind==='crossings')return Response.json({partial:true,rows:[],warning:'Results capped'});
+ return Response.json({partial:false,stale:false,rows:[{...record,category:'Food & supplies',lat:points[0][0],lng:points[0][1],retrievedAt:new Date().toISOString()}]});
+};
+const result=await collectRouteCorridor(points,500,new AbortController().signal,(done,total)=>updates.push([done,total]),mock);
+assert(maxInFlight<=2,'public source concurrency bounded');
+assert.equal(result.rows.length,1,'duplicate tile records deduplicated');
+assert.equal(result.report.sources.find(s=>s.kind==='resources').count,1,'source counts are unique records, not summed tile counts');
+assert.equal(result.report.sources.find(s=>s.kind==='closurestatus').unsupported,tiles.length);
+assert.equal(result.report.sources.find(s=>s.kind==='fema').stale,tiles.length);
+assert.equal(result.report.sources.find(s=>s.kind==='crossings').complete,0,'capped results do not count as complete');
+assert(result.report.sources.find(s=>s.kind==='wildfires').skipped>0,'repeated failures stop further requests');
+assert(calls.filter(k=>k==='wildfires').length<=4,'at most two in flight during source circuit break');
+assert.deepEqual(updates.at(-1),[tiles.length*5,tiles.length*5]);
+assert(routesSchema.safeParse([{...route,corridor:result.report}]).success,'collected summary passes save schema');
+const aborted=new AbortController();aborted.abort();
+await assert.rejects(collectRouteCorridor(points,500,aborted.signal,()=>{},mock),{name:'AbortError'});
+console.log('Source failure isolation, circuit breaking, regional gaps, stale/capped coverage, deduplication and cancellation passed.');

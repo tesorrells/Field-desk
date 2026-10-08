@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {floodRow,crossingRow,fetchFlood} from '../lib/flood.ts';
+import {geometryContains,geometryIntersects,parcelIntersects} from '../lib/geo.ts';
+const ring=(w,s,e,n)=>[[w,s],[e,s],[e,n],[w,n],[w,s]];
+const geometry={type:'Polygon',coordinates:[ring(-97.6,30.3,-97.5,30.4),ring(-97.58,30.32,-97.52,30.38)]};
+assert(geometryContains(geometry,[30.31,-97.59]));assert(!geometryContains(geometry,[30.35,-97.55]));
+const inner={type:'Polygon',coordinates:[ring(-97.56,30.34,-97.54,30.36)]};assert(!geometryIntersects(geometry,inner));
+const crossing={type:'Polygon',coordinates:[ring(-97.61,30.34,-97.59,30.36)]};assert(geometryIntersects(geometry,crossing));assert(geometryIntersects(crossing,geometry));
+assert(!parcelIntersects(geometry,[[30.34,-97.56],[30.34,-97.54],[30.36,-97.54],[30.36,-97.56]]));
+const f={geometry,properties:{OBJECTID:1,FLOOD_ZONE:'AE',EFFECTIVE_DATE:Date.parse('2014-08-18T00:00:00Z'),FIRM_PANEL:'Sample'}};
+const row=floodRow(f,'fema');assert.equal(row.flood.effectiveDate,'2014-08-18');assert.equal(row.source,'FloodPro FEMA');assert.equal(floodRow(f,'modeled').source,'FloodPro Austin model');
+const c=crossingRow({geometry:{type:'Point',coordinates:[-97.55,30.35]},properties:{objectid:2,road:'TEST RD'}});assert.equal(c.crossing.condition,'Current closure status unavailable');assert.equal(c.source,'Texas crossing inventory');
+let calls=0;let d=await fetchFlood('fema',[30.3,-97.6,30.4,-97.5],async u=>{assert(new URL(u).searchParams.get('where').includes('AREA NOT INCLUDED'));calls++;return Response.json({features:[f],exceededTransferLimit:calls===1});});assert.equal(calls,2);assert(d.complete);
+d=await fetchFlood('fema',[30.3,-97.6,30.4,-97.5],async()=>Response.json({features:[],exceededTransferLimit:true}));assert(!d.complete);
+await assert.rejects(fetchFlood('crossings',[30.3,-97.6,30.4,-97.5],async()=>Response.json({error:{code:400}})),/could not return/);
+console.log('Flood checks passed: holes, point and parcel intersections, distinct models, UTC calendar effective dates, unknown closure status, pagination, incomplete results and source failure.');

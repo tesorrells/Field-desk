@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {crimeRow,fetchCrime,occurrenceDate} from '../lib/crime.ts';
+const epoch=Date.parse('2026-10-03T05:00:00Z');
+const f={attributes:{OBJECTID:4,CRIME_DESCRIPTION:'THEFT',OCCURRENCE_DATE:epoch,OCCURRENCE_TIME:1320,ADDRESS_BLOCK:100,STREET_NAME:'SAMPLE',STREET_TYPE:'ST',ATTEMPT_COMPLETE_FLG:'C'},geometry:{x:-97.7,y:30.3}};
+const row=crimeRow(f,5);assert.equal(row.date,'2026-10-03T13:20:00');assert.equal(row.crime.attempt,'Completed');assert.equal(row.crime.block,'100 block SAMPLE ST');assert.equal(row.crime.mapId,'4');assert.equal(row.source,'Austin Police');assert.equal(crimeRow({...f,geometry:null},5),null);assert.equal(crimeRow({...f,geometry:{x:0,y:0}},5),null);
+assert.equal(occurrenceDate(epoch,0),'2026-10-03T00:00:00');assert.equal(occurrenceDate(null,1200),undefined);
+let calls=0;let d=await fetchCrime([30.2,-97.8,30.4,-97.6],async url=>{const u=new URL(url);assert(u.searchParams.get('where').includes('OCCURRENCE_DATE'));assert.equal(u.searchParams.get('outSR'),'4326');calls++;const layer=Number(u.pathname.split('/').at(-2)),offset=Number(u.searchParams.get('resultOffset'));return Response.json({features:[{...f,attributes:{...f.attributes,OBJECTID:offset+4}}],exceededTransferLimit:layer===5&&offset===0});});assert.equal(calls,11);assert.equal(d.rows.length,11);assert(d.complete);
+d=await fetchCrime([30.2,-97.8,30.4,-97.6],async()=>Response.json({features:[],exceededTransferLimit:true}));assert(!d.complete);
+await assert.rejects(fetchCrime([30.2,-97.8,30.4,-97.6],async()=>Response.json({error:{code:500}})),/could not return/);
+console.log('Crime checks passed: source coordinates, occurrence date/time, block location, offense flags, ten layers, pagination, cap, invalid locations, source failure.');
