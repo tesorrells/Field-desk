@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {parseRepeaters,fetchRadioCell,radioBounds,validRadioBounds,radioChannelSchema,newRadioChannel,channelFromRepeater} from '../lib/radio.ts';
+import {restorePortfolio,emptyContext,newLocation,activeStudy,updateActive,portfolioExport} from '../lib/locations.ts';
+import {isOlderStudyWrite} from '../lib/study-schema.ts';
+import {makeBackup,parseBackup,studyCounts} from '../lib/backup.ts';
+import {makeBriefing,renderBriefing} from '../lib/briefing.ts';
+const row={id:99,callsign:'TEST',latitude:38.9,longitude:-77.04,frequency:146940000,offset:-600000,mode:'FM',encode:'107.2',decode:'',city:'Public fixture',operational:0};
+const b=[38.8,-77.2,39,-77];let result=parseRepeaters([row,row,{...row,id:100,latitude:30}],b);assert.equal(result.rows.length,1);assert.equal(result.rows[0].radio.receiveMHz,'146.94');assert.equal(result.rows[0].radio.transmitMHz,'146.34');assert.equal(result.rows[0].radio.operational,'0');assert.equal(result.rows[0].radio.decode,'');
+const noOffset=parseRepeaters([{...row,offset:null}],b).rows[0];assert.equal(noOffset.radio.transmitMHz,undefined);assert.equal(channelFromRepeater(noOffset).verification,'Not checked');assert.equal(channelFromRepeater(noOffset).transmitMHz,'');
+assert.equal(parseRepeaters([{...row,offset:0}],b).rows[0].radio.transmitMHz,'146.94');assert.equal(parseRepeaters([row,{...row,id:2,latitude:null}],b).invalid,1);assert.throws(()=>parseRepeaters([],b));assert.throws(()=>parseRepeaters({},b));assert.throws(()=>parseRepeaters([{broken:true}],b));assert.equal(parseRepeaters([row],[0,0,1,1]).rows.length,0);
+await assert.rejects(fetchRadioCell(b,async()=>new Response('{}',{status:429})),/429/);assert.equal((await fetchRadioCell(b,async()=>new Response(JSON.stringify([row])))).rows.length,1);
+const entry={...newRadioChannel(),name:'Weather test',service:'Weather radio',receiveMHz:'162.400'};assert(radioChannelSchema.safeParse(entry).success);assert(!radioChannelSchema.safeParse({...entry,receiveMHz:'NaN'}).success);assert(!radioChannelSchema.safeParse({...entry,sourceUrl:'javascript:bad'}).success);assert(!radioChannelSchema.safeParse({...entry,checkedOn:'2026-13-40'}).success);assert(!radioChannelSchema.safeParse({...entry,verification:'Heard'}).success);
+let p=restorePortfolio({...emptyContext(),schemaVersion:11,routes:[],locations:[newLocation('Fixture work','Work')],sections:{Terrain:'Keep narrative'}});assert.equal(p.schemaVersion,12);assert.deepEqual(p.radioPlan,[]);assert(isOlderStudyWrite(11,12));p=updateActive(p,s=>({...s,radioPlan:[entry]}));p={...p,activeLocationId:p.locations[0].id};assert.equal(activeStudy(p).radioPlan.length,0);p=updateActive(p,s=>({...s,radioPlan:[{...entry,id:'work-radio',name:'Work channel'}]}));assert.equal(p.radioPlan[0].name,'Weather test');assert.equal(activeStudy(p).radioPlan[0].name,'Work channel');assert.deepEqual(restorePortfolio(portfolioExport(p).portfolio),p);assert.equal(studyCounts(p).frequencies,2);
+const report=makeBriefing(p,'Radio snapshot');const backup=makeBackup(p,[report]);assert.deepEqual(parseBackup(JSON.stringify(backup)).backup,backup);assert(renderBriefing(report).includes('Work channel'));const frozen=JSON.stringify(report);p=updateActive(p,s=>({...s,radioPlan:[]}));assert.equal(JSON.stringify(report),frozen);
+const bounds=radioBounds([30.3,-97.8,30.4,-97.7]);assert(bounds[0]<30.3&&bounds[3]>-97.7);
+console.log('Radio passed: Hz/offset conversion, missing tones, invalid coordinates, deduplication, source failures, date/link validation, legacy migration, older-write protection, location isolation, backups and immutable briefings.');
+
+assert(validRadioBounds(radioBounds([47.5,-122.4,47.7,-122.2])));assert(!validRadioBounds([-90,-180,90,180]));

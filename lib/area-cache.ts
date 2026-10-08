@@ -1,7 +1,7 @@
 import {parcelInBounds} from './geo';
 export type Bounds=[number,number,number,number];
 export type Snapshot={bbox:Bounds;rows:any[];fetchedAt:string;complete:boolean;provider?:string;limit?:number};
-export const cacheTTL:Record<string,number>={poweroutages:120000,wildfires:900000,closurestatus:120000,watergauges:300000,risktracts:86400000,firestations:86400000,emsstations:86400000,esd:86400000,water:86400000,sewer:86400000,resources:86400000,"311":900000,traffic:120000,fire:120000,parcels:86400000,crime:3600000,fema:86400000,modeled:86400000,crossings:86400000};
+export const cacheTTL:Record<string,number>={repeaters:86400000,poweroutages:120000,wildfires:900000,closurestatus:120000,watergauges:300000,risktracts:86400000,firestations:86400000,emsstations:86400000,esd:86400000,water:86400000,sewer:86400000,resources:86400000,"311":900000,traffic:120000,fire:120000,parcels:86400000,crime:3600000,fema:86400000,modeled:86400000,crossings:86400000};
 export function overlaps(a:Bounds,b:Bounds){return a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1];}
 export function hasPoint(b:Bounds,lat:number,lng:number){return lat>=b[0]&&lat<=b[2]&&lng>=b[1]&&lng<=b[3];}
 const size=(b:Bounds)=>(b[2]-b[0])*(b[3]-b[1]);

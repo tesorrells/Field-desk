@@ -18,7 +18,7 @@ Open **http://127.0.0.1:5173**. Storage and migrations are created automatically
 1. Set an address or map pin and draw its AOR/AOI.
 2. Review map layers and their sources, dates and coverage limits.
 3. Capture evidence, write findings and track unresolved questions.
-4. Add service alternatives, scenarios and routes between locations.
+4. Add service alternatives, scenarios and routes between locations. Services & infra also includes nearby repeaters and saved local radio frequencies.
 5. **Save study** to retain edits. **Sources & reports** contains review reminders, printable briefings and **Backup & restore**.
 
 ## Your data

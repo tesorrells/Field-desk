@@ -1,5 +1,6 @@
 // Fixed SVG artwork shared by map markers, the layer legend, and result lists.
 const artwork:Record<string,string>={
+ 'Radio repeaters':'<path d="M12 7v14M7 21h10M8 11l4-4 4 4M5 5a10 10 0 0 0 0 10M19 5a10 10 0 0 1 0 10M8 8a6 6 0 0 0 0 4M16 8a6 6 0 0 1 0 4"/>',
  'Power outages':'<path d="m13 2-9 12h7l-1 8 10-12h-7zM3 3l18 18"/>',
  'Wildfire incidents':'<path d="M12 2c3 5-2 7 2 10l3-5c5 6 5 14-5 15C2 21 3 13 7 9c-1 4 2 5 3 3 2-3 2-6 2-10z"/>',
  'Crossing status':'<path d="M3 8h18v7H3zM6 15v6M18 15v6M7 8l5 7M13 8l5 7M12 2v3"/>',

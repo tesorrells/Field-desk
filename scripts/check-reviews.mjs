@@ -11,7 +11,7 @@ const q={...newQuestion(),id:'same-id',question:'Is access available?',status:'A
 const r={...newRequirement(),task:'Check alternate access',reviewOn:today,evidenceIds:[q.evidence[0].id]};q.requirements=[r];
 const work={...newLocation('Work','Work'),id:'work',collection:{purpose:'',questions:[{...newQuestion(),id:q.id,question:'Work access?',reviewOn:'2026-10-06',evidence:[evidenceSnapshot(source,'Source')]}]}};
 let p=restorePortfolio({...emptyContext(),schemaVersion:9,collection:{purpose:'Access study',questions:[q]},scenarios:[newScenario()],servicePlans:[newServicePlan(source)],routes:[{id:'route',name:'Access route',role:'Primary',destination:'Public test destination',notes:'Unverified',marks:[],points:[[30,-98],[30.01,-98.01]]}],locations:[work],activeLocationId:'home'});
-assert.equal(p.schemaVersion,11);assert.equal(p.reviews.settings.intervalDays,90);assert.equal(p.reviews.history.length,0);assert(isOlderStudyWrite(9,10));
+assert.equal(p.schemaVersion,12);assert.equal(p.reviews.settings.intervalDays,90);assert.equal(p.reviews.history.length,0);assert(isOlderStudyWrite(9,10));
 const changed={...source,detail:'Reported closed',retrievedAt:'2026-10-07T12:00:00Z'};
 let queue=reviewQueue(p,[changed],false,today);let item=queue.find(i=>i.target.type==='Question');
 assert(item.reasons.some(r=>r.kind==='Due'));assert(item.reasons.some(r=>r.kind==='Source changed'&&r.before.includes('Reported open')&&r.after.includes('Reported closed')));assert.equal(item.matched,1);assert(!queue.some(i=>i.target.locationId==='work'));assert(queue.some(i=>i.target.type==='Route'));
