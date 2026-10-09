@@ -1,3 +1,4 @@
+import {fetchAlpr} from '../../../lib/alpr';
 import {fetchRadioCell,radioDirectory,validRadioBounds} from '../../../lib/radio';
 import {packsForArea} from '../../../lib/local-source-packs';
 import {combineSources} from '../../../lib/arcgis-area';
@@ -20,6 +21,7 @@ import {cacheView,missingExtent,type Bounds,type Snapshot} from "../../../lib/ar
 async function json(url:string){const r=await fetch(url,{signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error(`Austin data returned HTTP ${r.status}`);return r.json() as Promise<any>;}
 const response=(d:any)=>Response.json(d,{headers:{"Cache-Control":"no-store"}});
 async function collect(kind:string,bbox:Bounds){
+ if(kind==='alpr')return fetchAlpr(bbox);
  if(kind==='repeaters'){const rows:any[]=[];let invalid=0;let fetchedAt='';let cacheWarning='';for(let y=Math.floor(bbox[0]/10)*10;y<bbox[2];y+=10)for(let x=Math.floor(bbox[1]/10)*10;x<bbox[3];x+=10){const c=await cachedCondition(`hearham-cell-v1:${y}:${x}`,86400000,()=>fetchRadioCell([y,x,Math.min(90,y+10),Math.min(180,x+10)]));if(!c.data)throw Error(c.error||'HearHam directory unavailable');if(c.error)throw Error(c.error);if(c.fetchedAt&&(!fetchedAt||c.fetchedAt<fetchedAt))fetchedAt=c.fetchedAt;if(c.cacheWarning)cacheWarning=c.cacheWarning;invalid+=c.data.invalid;rows.push(...c.data.rows);}const unique=[...new Map(rows.filter(r=>r.lat>=bbox[0]&&r.lat<=bbox[2]&&r.lng>=bbox[1]&&r.lng<=bbox[3]).map(r=>[r.id,r])).values()];return {rows:unique,complete:invalid===0,limit:100000,fetchedAt:fetchedAt||new Date().toISOString(),provider:radioDirectory,warning:[invalid?'Some malformed directory records were excluded; coverage is incomplete.':'',cacheWarning].filter(Boolean).join(' ')||undefined};}
 
  if(kind==="poweroutages"){const c=await cachedCondition("bluebonnet-outages-v1",120000,()=>fetchBluebonnet());if(c.error||!c.data)throw Error(c.error||"Bluebonnet unavailable");return {rows:c.data.rows.filter((p:{lat:number;lng:number})=>p.lat>=bbox[0]&&p.lat<=bbox[2]&&p.lng>=bbox[1]&&p.lng<=bbox[3]),complete:true,limit:5000,fetchedAt:c.fetchedAt!,provider:"Bluebonnet public outage map",warning:c.cacheWarning};}
@@ -47,7 +49,7 @@ export async function GET(request:Request){
  if(!(kind==="repeaters"?validRadioBounds(bbox):validArea(bbox)))return Response.json({error:'Choose a smaller area with valid coordinates.'},{status:400});
  const region=regionalCoverage(kind,bbox);if(region&&!region.available)return response({rows:[],coverage:0,partial:true,stale:false,unsupported:true,warning:region.warning});
  try{
-  if(!serviceLayers[kind]&&!["repeaters","poweroutages","wildfires","closurestatus","watergauges","risktracts","resources","311","traffic","fire","parcels","crime","fema","modeled","crossings"].includes(kind))return Response.json({error:"Unknown source"},{status:400});
+  if(!serviceLayers[kind]&&!["alpr","repeaters","poweroutages","wildfires","closurestatus","watergauges","risktracts","resources","311","traffic","fire","parcels","crime","fema","modeled","crossings"].includes(kind))return Response.json({error:"Unknown source"},{status:400});
   const cacheKind=kind==='fema'?'fema-nfhl-v1':['parcels','water','sewer','closurestatus'].includes(kind)?kind+'-local-v2':kind;let snapshots:Snapshot[]=[];let cacheError=false;
   try{snapshots=await readSnapshots(cacheKind,bbox);}catch(error){cacheError=true;console.warn("Area cache unavailable",error);}
   const cached={...cacheView(kind,bbox,snapshots),warning:region?.warning||undefined};

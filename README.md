@@ -44,3 +44,5 @@ Read [AGENTS.md](AGENTS.md) before adding integrations or parsers. Optional sett
 ## License
 
 Project code is MIT licensed; third-party notices stay with their files. Data and upstream services have their own terms/attribution. The Area Intelligence Handbook is a reference, not a bundled asset.
+
+The **ALPR cameras** map layer uses community-reported OpenStreetMap data, the underlying source used by [DeFlock](https://deflock.org/), without an API key. It shares 24-hour area caches and retains source links and edit dates. Reports are incomplete and do not confirm current operation. Data: [© OpenStreetMap contributors, ODbL](https://www.openstreetmap.org/copyright).
