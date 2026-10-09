@@ -46,3 +46,5 @@ Read [AGENTS.md](AGENTS.md) before adding integrations or parsers. Optional sett
 Project code is MIT licensed; third-party notices stay with their files. Data and upstream services have their own terms/attribution. The Area Intelligence Handbook is a reference, not a bundled asset.
 
 The **ALPR cameras** map layer uses community-reported OpenStreetMap data, the underlying source used by [DeFlock](https://deflock.org/), without an API key. It shares 24-hour area caches and retains source links and edit dates. Reports are incomplete and do not confirm current operation. Data: [© OpenStreetMap contributors, ODbL](https://www.openstreetmap.org/copyright).
+
+**Weather overlays** in the map sidebar provide [RainViewer](https://www.rainviewer.com/api.html) past radar with playback/opacity controls and [NWS](https://www.weather.gov/documentation/services-web-api) alert polygons for the current view. Radar is regional resolution, not a forecast; RainViewer free-use terms apply. Some NWS alerts lack polygons and remain available through point-based Dashboard checks. Live weather is excluded from ATAK exports and briefings.
