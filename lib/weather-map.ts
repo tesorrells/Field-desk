@@ -12,7 +12,7 @@ export function parseRadar(data:any):RadarManifest{
 }
 export function radarTileUrl(manifest:RadarManifest,frame:RadarFrame){return `${manifest.host}${frame.path}/256/{z}/{x}/{y}/2/0_0.png`;}
 export function validWeatherBounds(b:number[]):b is Bounds{return b.length===4&&validPoint(b[0],b[1])&&validPoint(b[2],b[3])&&b[0]<b[2]&&b[1]<b[3];}
-function geometry(value:any):ParcelGeometry|null{
+export function weatherPolygon(value:any):ParcelGeometry|null{
  if(!value||!['Polygon','MultiPolygon'].includes(value.type)||!Array.isArray(value.coordinates))return null;
  const polys=value.type==='Polygon'?[value.coordinates]:value.coordinates;let count=0;
  if(!polys.length||polys.length>100)return null;
@@ -26,7 +26,7 @@ export function parseMapAlerts(features:any[]):AlertFeed{
   if(!p||typeof p.event!=='string'||typeof p.id!=='string'||!Number.isFinite(Date.parse(p.expires))){invalid++;continue;}
   if(p.status!=='Actual'||p.messageType==='Cancel')continue;
   if(!f.geometry){unmapped++;continue;}
-  const g=geometry(f.geometry);if(!g){invalid++;continue;}if(seen.has(p.id))continue;seen.add(p.id);
+  const g=weatherPolygon(f.geometry);if(!g){invalid++;continue;}if(seen.has(p.id))continue;seen.add(p.id);
   rows.push({id:p.id,event:string(p.event,200),headline:string(p.headline,1000)||p.event,severity:string(p.severity,40),sent:p.sent,onset:p.onset,expires:p.expires,ends:p.ends,description:string(p.description),instruction:string(p.instruction),url:typeof f.id==='string'&&/^https:\/\/api\.weather\.gov\/alerts\/[^?#]+$/.test(f.id)?f.id:'https://www.weather.gov/',geometry:g});
  }
  return {rows,unmapped,invalid};
