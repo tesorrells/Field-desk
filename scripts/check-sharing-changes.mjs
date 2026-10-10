@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+import {restorePortfolio,emptyContext,updateActive} from '../lib/locations.ts';
+import {createSharedGroup,stageContributions,makeSharedPackage,previewSharedMerge,addSharedReview} from '../lib/sharing.ts';
+import {packageChanges,payloadChanges,needsSharedAttention} from '../lib/sharing-changes.ts';
+
+const note={id:'fixture',name:'Synthetic bridge',lat:40,lng:-105,category:'Observation',source:'Field visit',detail:'Inspection pending',confidence:'Unverified'};
+let author=restorePortfolio({...emptyContext(),notes:[note]});
+author=createSharedGroup(author,'Fixture group','Fixture author');
+const groupId=author.sharing.groups[0].id;
+author=stageContributions(author,groupId,['note:fixture']);
+const recordId=author.sharing.groups[0].records[0].id,firstId=author.sharing.groups[0].records[0].revisions[0].id;
+const initial=makeSharedPackage(author,groupId,[recordId]);
+assert.equal(packageChanges(undefined,initial)[0].status,'New');
+let receiver=previewSharedMerge(restorePortfolio(emptyContext()),initial,'home').next;
+const firstGroup=receiver.sharing.groups[0];
+assert.equal(packageChanges(firstGroup,initial)[0].status,'Unchanged');
+const reordered=structuredClone(initial);
+reordered.records[0].revisions[0].payload=Object.fromEntries(Object.entries(reordered.records[0].revisions[0].payload).reverse());
+assert.equal(packageChanges(firstGroup,reordered)[0].status,'Unchanged');
+const key=recordId+':'+firstId,proof={publicKey:'synthetic-public-key',signedAt:'2026-10-01T00:00:00Z',signature:'synthetic-proof'};
+// Classification is inspection only; real packages still pass signature and contact verification.
+const proofPackage={...initial,auth:{events:{[key]:proof}}};
+assert.equal(packageChanges(firstGroup,proofPackage)[0].status,'Updated');
+assert.equal(packageChanges(firstGroup,proofPackage)[0].proofs,1);
+assert.equal(packageChanges({...firstGroup,signatures:{[key]:proof}},proofPackage)[0].status,'Unchanged');
+assert.equal(packageChanges({...firstGroup,signatures:{[key]:{...proof,publicKey:'different-key'}}},proofPackage)[0].status,'Conflict');
+author=updateActive(author,s=>({...s,notes:s.notes.map(n=>({...n,detail:'Deck repaired',lat:40.001}))}));
+author=stageContributions(author,groupId,['note:fixture']);
+// Ensure distinct claimed instants; import order itself must not decide recency.
+author.sharing.groups[0].records[0].revisions[0].createdAt='2026-10-01T00:00:00Z';
+author.sharing.groups[0].records[0].revisions[1].createdAt='2026-10-02T00:00:00Z';
+// Existing immutable event remains exactly identical in receiver.
+receiver.sharing.groups[0].records[0].revisions[0].createdAt='2026-10-01T00:00:00Z';
+const currentSnapshot=JSON.stringify(receiver),update=makeSharedPackage(author,groupId,[recordId]);
+const changes=packageChanges(receiver.sharing.groups[0],update);
+assert.equal(changes[0].status,'Updated');assert.equal(changes[0].revisions,1);assert.equal(changes[0].selectedRevision,firstId);
+assert.equal(JSON.stringify(receiver),currentSnapshot,'Comparison does not mutate the study');
+const differences=payloadChanges(update.records[0].revisions[0].payload,update.records[0].revisions[1].payload);
+assert.deepEqual(differences.map(d=>d.key).sort(),['detail','point']);
+receiver=previewSharedMerge(receiver,update,'home').next;
+const record=receiver.sharing.groups[0].records[0];
+assert.equal(receiver.sharing.groups[0].selected[recordId],firstId,'Import keeps displayed revision');
+assert(needsSharedAttention(record,firstId));
+assert(!needsSharedAttention(record,record.revisions[1].id));
+const conflict=structuredClone(update);conflict.records[0].revisions[0].payload.detail='Different immutable content';
+assert.equal(packageChanges(receiver.sharing.groups[0],conflict)[0].status,'Conflict');
+assert.throws(()=>previewSharedMerge(receiver,conflict,'home'),/different content/);
+assert.deepEqual(previewSharedMerge(receiver,conflict,'home',undefined,[]).next,receiver,'Deselecting conflict cannot overwrite existing history');
+const identityConflict=structuredClone(update);identityConflict.records[0].member.name='Changed identity';
+assert.equal(packageChanges(receiver.sharing.groups[0],identityConflict)[0].status,'Conflict');
+receiver=createSharedGroup(receiver,'Private group','Fixture reviewer');
+receiver=addSharedReview(receiver,groupId,recordId,{revisionId:record.revisions[1].id,status:'Disputed',observedAt:'2026-10-03T00:00:00Z',comment:'Synthetic inspection differs'});
+assert(needsSharedAttention(receiver.sharing.groups[0].records[0],record.revisions[1].id));
+const returnPackage=makeSharedPackage(receiver,groupId,[recordId],author.sharing.member.id);
+const reviewChanges=packageChanges(author.sharing.groups[0],returnPackage);
+assert.equal(reviewChanges[0].revisions,0);assert.equal(reviewChanges[0].reviews,1);assert.equal(reviewChanges[0].status,'Updated');
+const reviewed=receiver.sharing.groups[0].records[0];
+const expiry=structuredClone(reviewed);expiry.reviews[0].status='Confirmed';expiry.reviews[0].reviewBy='2026-10-04T00:00:00Z';
+assert(needsSharedAttention(expiry,record.revisions[1].id,Date.parse('2026-10-05T00:00:00Z')));
+assert(!needsSharedAttention(expiry,record.revisions[1].id,Date.parse('2026-10-03T00:00:00Z')));
+assert.deepEqual(payloadChanges(notePayload(),{...notePayload(),url:'https://example.org'}).map(d=>d.key),['url']);
+function notePayload(){return {kind:'observation',name:'Fixture',point:[40,-105],detail:'',source:''};}
+assert.equal(packageChanges(author.sharing.groups[0],{...update,records:[]}).length,0,'An omission is not a deletion');
+console.log('Sharing change review passed: idempotency, field/geometry diffs, immutable collisions, selected-version preservation, revision-specific disputes/expiry, review-only updates, missing fields and omissions.');

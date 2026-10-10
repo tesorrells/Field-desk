@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {PEER_CAPABILITIES,LEGACY_CAPABILITIES,requirePackageCapabilities,peerCapabilitiesSchema} from '../lib/peer-capabilities.ts';
+const pkg={records:PEER_CAPABILITIES.payloadKinds.map(kind=>({revisions:[{payload:{kind}}],reviews:[]}))};
+assert.doesNotThrow(()=>requirePackageCapabilities(pkg,PEER_CAPABILITIES));
+assert.throws(()=>requirePackageCapabilities(pkg,LEGACY_CAPABILITIES),/update required.*finding.*evidence.*question.*service-plan.*scenario/i);
+assert.doesNotThrow(()=>requirePackageCapabilities({records:pkg.records.slice(0,3)},LEGACY_CAPABILITIES));
+const notices={records:[{revisions:[{payload:{kind:'observation'},notice:{kind:'Withdrawn'}}],reviews:[]}]};
+assert.throws(()=>requirePackageCapabilities(notices,LEGACY_CAPABILITIES),/corrections and withdrawals/);
+assert.doesNotThrow(()=>requirePackageCapabilities(notices,PEER_CAPABILITIES));
+assert(!peerCapabilitiesSchema.safeParse({...PEER_CAPABILITIES,protocol:2}).success);
+assert(!peerCapabilitiesSchema.safeParse({...PEER_CAPABILITIES,features:Array(21).fill('x')}).success);
+assert(!peerCapabilitiesSchema.safeParse({...PEER_CAPABILITIES,privateState:{}}).success);
+console.log('Peer capabilities passed: all supported document kinds, classic legacy scope, author-notice negotiation, unsupported content failure, protocol and metadata bounds. Live signed negotiation is checked by check-peer-permissions.');

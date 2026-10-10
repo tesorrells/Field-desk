@@ -1,4 +1,5 @@
 export const layerGroups=[
+ {name:"Shared studies",layers:["Shared contributions"]},
  {name:'Resources & gathering places',layers:['Food & supplies','Medical','Fuel','Public services','Gathering places']},
  {name:'Emergency services',layers:['Fire stations','EMS stations','Police & sheriff','Emergency districts']},
  {name:'Utilities & communications',layers:['Radio repeaters','Power outages','Water providers','Wastewater providers','Power & communications']},

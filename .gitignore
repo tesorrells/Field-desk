@@ -56,3 +56,24 @@ next-env.d.ts
 *.sqlite-shm
 *.sqlite-wal
 /.local-storage-test-*/
+
+# Optional peer transport credentials, also in custom data directories
+peer-sync.json
+peer-sync.json.tmp
+peer-sync.lock
+
+field-desk-identity.json
+
+field-desk-identity.json.tmp
+
+peer-inbox.sqlite
+peer-inbox.sqlite-wal
+peer-inbox.sqlite-shm
+
+# Offline private identity recovery kits and retirement markers
+*.field-desk-recovery
+field-desk-retired.json
+.field-desk-recovery-*/
+
+field-desk-identity-binding.json
+field-desk-identity-binding.json.tmp

@@ -21,3 +21,7 @@ await assert.rejects(fetchMapAlerts(async()=>Response.json({features:Array(3001)
 const prior={data:feed,fetchedAt:'2026-10-09T19:00:00Z',checkedAt:'2026-10-09T19:00:00Z',nextCheckAt:'2026-10-09T19:02:00Z'};
 const stale=await refreshCondition(prior,async()=>{throw Error('offline');},120000,new Date('2026-10-09T19:10:00Z'));assert.deepEqual(stale.data,feed);assert.equal(stale.fetchedAt,prior.fetchedAt);assert.equal(stale.error,'offline');
 console.log('Weather parser, trusted tiles, scoped geometry, expiry, pagination, limits and stale fallback checks passed');
+
+const {weatherJson: redirectCheckedWeather}=await import("../lib/weather-map.ts");
+await assert.rejects(redirectCheckedWeather("https://official.example/data",async (_url,options)=>{assert.equal(options.redirect,"manual");return new Response(null,{status:302,headers:{Location:"https://other.example/"}});}),/302/);
+console.log("Weather transport rejects redirects without following them; compatible with both Node and Workers.");

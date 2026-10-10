@@ -207,3 +207,33 @@ html[data-theme="dark"] .map{background:#25282c}
 .weather-risk-legend{display:flex;flex-wrap:wrap;gap:6px;font-size:11px;margin:10px 0}.weather-risk-legend span{display:flex;align-items:center;gap:5px}.weather-risk-legend i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid #777}.weather-air-pin{display:flex;align-items:center;justify-content:center;gap:3px;background:var(--surface);color:var(--ink);border:3px solid;border-radius:8px;font-size:12px;font-weight:700;box-shadow:0 1px 5px #0006;height:30px}.weather-air-pin svg{width:17px;height:20px}.weather-air-pin.is-stale{border-style:dashed}
 
 .weather-outlook-matches{margin:12px 0;padding:10px;border:1px solid var(--line);border-radius:8px}.weather-outlook-matches summary{font-size:12px;font-weight:700;cursor:pointer}.weather-outlook-matches p{font-size:12px;line-height:1.5}
+
+/* Shared-study packages reuse the report workspace in both themes. */
+.sharing-content fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.sharing-content fieldset:disabled { opacity: .65; }
+.sharing-content .sharing-choice { display: flex; align-items: center; gap: .65rem; margin: .65rem 0; cursor: pointer; }
+.sharing-content .sharing-choice input { width: auto; flex: 0 0 auto; }
+.sharing-content details { margin: .8rem 0; }
+.sharing-content summary { cursor: pointer; }
+.sharing-content .shared-payload { padding: .8rem 0; overflow-wrap: anywhere; }
+.sharing-content .shared-payload p, .sharing-content .shared-review p { white-space: pre-wrap; }
+.sharing-content .shared-payload .badge { margin-left: .6rem; }
+.sharing-content pre { max-height: 20rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); padding: .75rem; font-size: .8rem; }
+.sharing-content .shared-review { border-top: 1px solid var(--line); padding: .75rem 0; }
+.sharing-content .shared-record label { display: grid; gap: .4rem; margin: .8rem 0; }
+.sharing-content .backup-card > button { margin-right: .5rem; margin-top: .6rem; }
+
+.peer-sync-card .peer-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin:.75rem 0; }
+.peer-sync-card code { overflow-wrap:anywhere; }
+
+.shared-diff-scroll { overflow-x: auto; max-width: 100%; }
+.shared-diff { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.shared-diff th, .shared-diff td { padding: .65rem; border: 1px solid var(--line); text-align: left; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
+.shared-diff th:first-child { width: 18%; }
+.shared-diff td { }
+.shared-comparison { margin: .8rem 0; }
+
+.shared-document-fields { margin: .7rem 0; }
+.shared-document-fields > div { padding: .5rem 0; border-bottom: 1px solid var(--line); }
+.shared-document-fields dt { font-weight: 600; color: var(--muted); font-size: 12px; }
+.shared-document-fields dd { margin: .25rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

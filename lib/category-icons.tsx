@@ -1,5 +1,6 @@
 // Fixed SVG artwork shared by map markers, the layer legend, and result lists.
 const artwork:Record<string,string>={
+ 'Shared contributions':'<circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M21 21v-3a6 6 0 0 0-4-5"/>',
  'ALPR cameras':'<rect x="3" y="6" width="13" height="10" rx="2"/><path d="m16 9 5-3v10l-5-3M7 16v5M4 21h6"/>',
  'Radio repeaters':'<path d="M12 7v14M7 21h10M8 11l4-4 4 4M5 5a10 10 0 0 0 0 10M19 5a10 10 0 0 1 0 10M8 8a6 6 0 0 0 0 4M16 8a6 6 0 0 1 0 4"/>',
  'Power outages':'<path d="m13 2-9 12h7l-1 8 10-12h-7zM3 3l18 18"/>',

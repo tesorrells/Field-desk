@@ -26,7 +26,7 @@ export function parseStations(data:any,bbox:Bounds):StationFeed{
 export async function fetchStations(bbox:Bounds,fetcher:typeof fetch=fetch){
  if(!validStationBounds(bbox))throw Error('Zoom in to a local or regional view to load weather stations.');
  const url='https://aviationweather.gov/api/data/metar?'+new URLSearchParams({bbox:bbox.join(','),format:'json'});
- const r=await fetcher(url,{redirect:'error',headers:{Accept:'application/json','User-Agent':'FieldDesk/1.0 (local weather observations)'},signal:AbortSignal.timeout(20000)});
+ const r=await fetcher(url,{redirect:'manual',headers:{Accept:'application/json','User-Agent':'FieldDesk/1.0 (local weather observations)'},signal:AbortSignal.timeout(20000)});
  if(r.status===204)return {rows:[],partial:false,invalid:0};if(!r.ok)throw Error(`Weather stations returned HTTP ${r.status}`);const text=await r.text();if(text.length>2000000)throw Error('Station response exceeds size limit.');return parseStations(JSON.parse(text),bbox);
 }
 function check(data:any){if(data?.error)throw Error('NOAA rainfall service: '+(data.error.message||'request failed'));return data;}
